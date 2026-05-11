@@ -1,7 +1,7 @@
 use std::{
     fmt,
     fs::File,
-    io::{ErrorKind, Read},
+    io::{ErrorKind, Read, Write},
     ops::Range,
     path::Path,
 };
@@ -89,6 +89,12 @@ impl Keyfile {
         }
 
         false
+    }
+
+    pub fn extract_secret(&self, mut to: File) -> bool {
+        const SECRET_RANGE: Range<usize> = 96..128;
+
+        to.write(&self.0[SECRET_RANGE]).is_ok()
     }
 }
 
