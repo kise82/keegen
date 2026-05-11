@@ -8,7 +8,9 @@ use std::{
 
 use base64ct::{Base64, Encoding};
 use sha2::{Digest, Sha256};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
+#[derive(ZeroizeOnDrop)]
 pub struct Keyfile([u8; 128 + 1]);
 
 #[derive(Debug)]
@@ -48,7 +50,7 @@ impl Keyfile {
         }
 
         loop {
-            let hash = hasher.clone().finalize();
+            let mut hash = hasher.clone().finalize();
             Base64::encode(&hash[Self::HASH_RANGE], output)
                 .expect("`Self::KEY_SIZE` should match the encoded length for `Self::HASH_RANGE`");
 
@@ -57,6 +59,7 @@ impl Keyfile {
             }
 
             hasher.update(hash);
+            hash.zeroize();
         }
     }
 
