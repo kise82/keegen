@@ -3,15 +3,19 @@ use std::{
     fs::File,
     io::{ErrorKind, Read, Write},
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use base64ct::{Base64, Encoding};
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(ZeroizeOnDrop)]
-pub struct Keyfile([u8; 128 + 1]);
+pub struct Keyfile {
+    data: [u8; 128 + 1],
+    can_save: bool,
+}
 
 #[derive(Debug)]
 pub enum KeyfileError {
@@ -26,24 +30,36 @@ impl Keyfile {
     pub const KEY_SIZE: usize = (Self::HASH_RANGE.end - Self::HASH_RANGE.start).div_ceil(3) * 4;
 
     pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, KeyfileError> {
-        let mut ret = Self([0; _]);
+        let mut ret = Self {
+            data: [0; _],
+            can_save: false,
+        };
         let mut file = File::open(path).map_err(|err| match err.kind() {
             ErrorKind::NotFound => KeyfileError::NoSuchFile,
             ErrorKind::IsADirectory => KeyfileError::IsADirectory,
             other => KeyfileError::Other(other),
         })?;
 
-        match file.read(&mut ret.0) {
+        match file.read(&mut ret.data) {
             Ok(128) => Ok(ret),
             Ok(_) => Err(KeyfileError::BadLength),
             Err(other) => Err(KeyfileError::Other(other.kind())),
         }
     }
 
+    pub fn new_random(mut rng: impl Rng) -> Self {
+        let mut ret = Self {
+            data: [0; _],
+            can_save: true,
+        };
+        rng.fill_bytes(&mut ret.data);
+        ret
+    }
+
     pub fn generate<S: AsRef<str>>(&self, seed: S, output: &mut [u8; Self::KEY_SIZE]) {
         let seed = seed.as_ref();
 
-        let mut hasher = Sha256::new_with_prefix(&self.0[0..32]);
+        let mut hasher = Sha256::new_with_prefix(&self.data[0..32]);
 
         for part in seed.split_whitespace() {
             hasher.update(part);
@@ -60,6 +76,13 @@ impl Keyfile {
 
             hasher.update(hash);
             hash.zeroize();
+        }
+    }
+
+    pub fn save(self, to: PathBuf) -> bool {
+        match (self.can_save, File::create_new(to)) {
+            (true, Ok(mut file)) => file.write(&self.data[..128]).is_ok(),
+            (_, _) => false,
         }
     }
 
@@ -94,7 +117,7 @@ impl Keyfile {
     pub fn extract_secret(&self, mut to: File) -> bool {
         const SECRET_RANGE: Range<usize> = 96..128;
 
-        to.write(&self.0[SECRET_RANGE]).is_ok()
+        to.write(&self.data[SECRET_RANGE]).is_ok()
     }
 }
 
