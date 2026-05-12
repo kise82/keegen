@@ -8,6 +8,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use keegen::Keyfile;
 use rand::rngs::StdRng;
+use zeroize::Zeroize;
 
 #[derive(Parser)]
 struct Cli {
@@ -52,6 +53,8 @@ fn main() {
                 "{}",
                 str::from_utf8(&key).expect("Resulting key should be comprised of ASCII only")
             );
+
+            key.zeroize();
         }
         Some(Commands::Generate) => {
             if keyfile.save(cli.keyfile) {
