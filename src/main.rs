@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     io::{self, BufRead},
     path::PathBuf,
     process,
@@ -20,19 +19,19 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Generates a new keyfile
-    Generate,
+    /// Creates a new keyfile
+    New,
 
-    /// Extracts the symmetric key from the keyfile.
+    /// Extracts a 256-bit symmetric key from the keyfile.
     Extract,
 }
 
 fn main() {
     let cli = Cli::parse();
-    let keyfile = if let Some(&Commands::Generate) = cli.command.as_ref() {
+    let keyfile = if matches!(cli.command, Some(Commands::New)) {
         Keyfile::new_random(rand::make_rng::<StdRng>())
     } else {
-        Keyfile::try_new(cli.keyfile.clone()).unwrap_or_else(|err| {
+        Keyfile::new_from_file(cli.keyfile.clone()).unwrap_or_else(|err| {
             eprintln!("Error: {err}");
             process::exit(1)
         })
@@ -46,42 +45,30 @@ fn main() {
                 .read_line(&mut seed)
                 .expect("Stdin should be available for reading");
 
-            let mut key = [0; Keyfile::KEY_SIZE];
-            keyfile.generate(&seed, &mut key);
+            let mut password = [0; Keyfile::PW_SIZE];
+            keyfile.derive_pass(&seed, &mut password);
+            seed.zeroize();
 
             print!(
                 "{}",
-                str::from_utf8(&key).expect("Resulting key should be comprised of ASCII only")
+                str::from_utf8(&password).expect("Resulting key should be comprised of ASCII only")
             );
 
-            key.zeroize();
+            password.zeroize();
         }
-        Some(Commands::Generate) => {
-            if keyfile.save(cli.keyfile) {
-                println!("New keyfile saved.");
-            } else {
-                eprintln!(
-                    "\
-Error: Unable to save new keyfile.
-Possible reasons:
- - File with such name already exists;
- - No write permissions; or
- - An unrecoverable filesystem error."
-                );
-            }
-        }
-        Some(Commands::Extract) => match File::create_new("./secret.key") {
-            Ok(file) => {
-                if keyfile.extract_secret(file) {
-                    println!("Secret written to `./secret.key`.");
-                } else {
-                    eprintln!("Error: Couldn't write secret to `./secret.key`.");
-                }
-            }
-            Err(err) => {
-                eprintln!("Error: Unable to create `./secret.key` -- {err}");
+        Some(Commands::New) => {
+            if let Err(err) = keyfile.save_to(cli.keyfile) {
+                eprintln!("Error: {err}");
                 process::exit(1);
             }
-        },
+            println!("New keyfile written.");
+        }
+        Some(Commands::Extract) => {
+            if let Err(err) = keyfile.extract_symm_to("./secret.key") {
+                eprintln!("Error: {err}");
+                process::exit(1);
+            }
+            println!("Symmetric key extracted into `./secret.key`.");
+        }
     }
 }
