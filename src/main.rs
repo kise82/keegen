@@ -2,6 +2,7 @@ use std::{
     io::{self, BufRead},
     path::PathBuf,
     process,
+    str::FromStr,
 };
 
 use clap::{Parser, Subcommand};
@@ -23,7 +24,7 @@ enum Commands {
     New,
 
     /// Extracts a 256-bit symmetric key from the keyfile.
-    Extract,
+    Extract { path: Option<PathBuf> },
 }
 
 fn main() {
@@ -31,7 +32,7 @@ fn main() {
     let keyfile = if matches!(cli.command, Some(Commands::New)) {
         Keyfile::new_random(rand::make_rng::<StdRng>())
     } else {
-        Keyfile::new_from_file(cli.keyfile.clone()).unwrap_or_else(|err| {
+        Keyfile::new_from_file(&cli.keyfile).unwrap_or_else(|err| {
             eprintln!("Error: {err}");
             process::exit(1)
         })
@@ -63,12 +64,15 @@ fn main() {
             }
             println!("New keyfile written.");
         }
-        Some(Commands::Extract) => {
-            if let Err(err) = keyfile.extract_symm_to("./secret.key") {
+        Some(Commands::Extract { path }) => {
+            let path = path.unwrap_or(
+                PathBuf::from_str("./secret.key").expect("`./secret.key` should be a valid path"),
+            );
+            if let Err(err) = keyfile.extract_symm_to(&path) {
                 eprintln!("Error: {err}");
                 process::exit(1);
             }
-            println!("Symmetric key extracted into `./secret.key`.");
+            println!("Symmetric key extracted into `{}`.", path.display());
         }
     }
 }
