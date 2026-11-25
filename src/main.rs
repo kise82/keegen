@@ -1,78 +1,62 @@
 use std::{
-    io::{self, BufRead},
+    fs::File,
+    io::{self, BufRead, Read},
     path::PathBuf,
     process,
-    str::FromStr,
 };
 
-use clap::{Parser, Subcommand};
-use keegen::Keyfile;
-use rand::rngs::StdRng;
-use zeroize::Zeroize;
+use clap::Parser;
+use keegen::{Keyfile, KeyfileError, consts::*};
+use zeroize::Zeroizing;
 
 #[derive(Parser)]
-struct Cli {
+pub struct Args {
     keyfile: PathBuf,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Creates a new keyfile
-    New,
-
-    /// Extracts a 256-bit symmetric key from the keyfile.
-    Extract { path: Option<PathBuf> },
 }
 
 fn main() {
-    let cli = Cli::parse();
-    let keyfile = if matches!(cli.command, Some(Commands::New)) {
-        Keyfile::new_random(rand::make_rng::<StdRng>())
-    } else {
-        Keyfile::new_from_file(&cli.keyfile).unwrap_or_else(|err| {
-            eprintln!("Error: {err}");
-            process::exit(1)
-        })
+    let args = Args::parse();
+
+    let mut file = match File::open(args.keyfile) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            process::exit(1);
+        }
     };
 
-    match cli.command {
-        None => {
-            let mut seed = String::with_capacity(64);
-            io::stdin()
-                .lock()
-                .read_line(&mut seed)
-                .expect("Stdin should be available for reading");
-
-            let mut password = [0; Keyfile::PW_SIZE];
-            keyfile.derive_pass(&seed, &mut password);
-            seed.zeroize();
-
-            print!(
-                "{}",
-                str::from_utf8(&password).expect("Resulting key should be comprised of ASCII only")
-            );
-
-            password.zeroize();
-        }
-        Some(Commands::New) => {
-            if let Err(err) = keyfile.save_to(cli.keyfile) {
-                eprintln!("Error: {err}");
+    let keyfile = {
+        let mut buf = Zeroizing::new([0u8; KEYFILE_LEN + 1]); // + 1 as a canary for oversized files.
+        let n_read = match file.read(&mut *buf) {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("Error: {e}");
                 process::exit(1);
             }
-            println!("New keyfile written.");
-        }
-        Some(Commands::Extract { path }) => {
-            let path = path.unwrap_or(
-                PathBuf::from_str("./secret.key").expect("`./secret.key` should be a valid path"),
-            );
-            if let Err(err) = keyfile.extract_symm_to(&path) {
-                eprintln!("Error: {err}");
+        };
+
+        match TryInto::<Keyfile>::try_into(&buf[..n_read]) {
+            Ok(kf) => kf,
+            Err(e) => {
+                match e {
+                    KeyfileError::BadLength { expected } => {
+                        eprintln!(
+                            "Error: Keyfile has incorrect size; expected *exactly* {expected} bytes."
+                        );
+                    }
+                }
                 process::exit(1);
             }
-            println!("Symmetric key extracted into `{}`.", path.display());
         }
+    };
+
+    let mut seed = String::with_capacity(128);
+    if let Err(e) = io::stdin().lock().read_line(&mut seed) {
+        eprintln!("Error: {e}");
+        process::exit(1);
     }
+
+    let mut key = Zeroizing::new([0u8; KEY_BUF_LEN]);
+
+    print!("{}", keyfile.gen_key(seed.trim(), &mut key));
 }
