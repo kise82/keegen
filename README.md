@@ -15,4 +15,4 @@ My overly silly, not very minimal password generator.
 > Password seeds are not meant to be secret: all security relies on the obscurity of the keyfile!
 
 # Extra: how to get a keyfile?
- - On Unix: `dd if=/dev/urandom of=keyfile bs=1 count=128`
+ - On Unix: `dd if=/dev/urandom of=keyfile bs=128 count=1`
