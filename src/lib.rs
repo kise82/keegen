@@ -8,7 +8,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub struct Keyfile([u8; KEYFILE_LEN]);
 
 pub enum KeyfileError {
-    BadLength { expected: u8 },
+    BadLength { expected: usize },
 }
 
 impl TryFrom<&[u8]> for Keyfile {
@@ -17,10 +17,12 @@ impl TryFrom<&[u8]> for Keyfile {
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let mut ret = Self([0u8; _]);
         if value.len() == KEYFILE_LEN {
-            ret.0.copy_from_slice(&value[..KEYFILE_LEN]);
+            ret.0.copy_from_slice(value);
             Ok(ret)
         } else {
-            Err(Self::Error::BadLength { expected: 128 })
+            Err(Self::Error::BadLength {
+                expected: KEYFILE_LEN,
+            })
         }
     }
 }
