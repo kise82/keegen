@@ -44,7 +44,7 @@ impl Keyfile {
             // NOTE Due to inability to `zeroize` the hasher, fuzz it further
             hasher.update(&hash[RESEED_RANGE]);
 
-            if Self::check_formatting(key) {
+            if check_key_format(key) {
                 break;
             }
         }
@@ -52,34 +52,30 @@ impl Keyfile {
         // SAFETY It's a base64 string, therefore valid UTF-8
         unsafe { str::from_utf8_unchecked(&key_buf[..]) }
     }
+}
 
-    fn check_formatting(key: &str) -> bool {
-        if key.len() != KEY_BUF_LEN {
-            return false;
-        }
-
-        let mut upper = false;
-        let mut lower = false;
-        let mut digits = false;
-        let mut plus_count = 0;
-        let mut other_count = 0;
-
-        for b in key.bytes() {
-            if b.is_ascii_uppercase() {
-                upper = true;
-            } else if b.is_ascii_lowercase() {
-                lower = true;
-            } else if b.is_ascii_digit() {
-                digits = true;
-            } else if b == b'+' {
-                plus_count += 1;
-            } else {
-                other_count += 1;
-            }
-        }
-
-        plus_count == 1 && other_count == 0 && upper && lower && digits
+pub fn check_key_format(key: &str) -> bool {
+    if key.len() != KEY_BUF_LEN {
+        return false;
     }
+
+    let mut upper = false;
+    let mut lower = false;
+    let mut digits = false;
+    let mut plus_count = 0;
+    let mut other_count = 0;
+
+    for b in key.bytes() {
+        match b {
+            b'A'..=b'Z' => upper = true,
+            b'a'..=b'z' => lower = true,
+            b'0'..=b'9' => digits = true,
+            b'+' => plus_count += 1,
+            _ => other_count += 1,
+        }
+    }
+
+    plus_count == 1 && other_count == 0 && upper && lower && digits
 }
 
 pub mod consts {
