@@ -1,18 +1,22 @@
 # `keegen`
+## What is it?
+My overly silly password generation utility.
 
-My overly silly, not very minimal password generator.
+## How it works
+By owning a **private** 128 bytes file (`Keyfile`) and inputting a string (`seed`), one gets back a reasonable password that passes most password strength checks.
 
-# Security
-
+## Security
 > [!CAUTION]
 > I have ABSOLUTELY **NO** training, formal or informal, on cryptography or cryptanalysis.
-> *I* **personally** **"**trust**"** this tool based on a single amateurish premise:
-> - Passwords are 66 bits (+ more 6 for the single `+`), with a search space of `885,443,715,538,058,477,568` combinations.
+> *I* **personally** **"**trust**"** this tool based on a few amateurish premises:
+> - The randomness of the first 32 bytes (256 bits) of the Keyfile.
+> - The resilience of the SHA-256 algorithm.
+> - There are `2^66 * 12` (`885_443_715_538_058_477_568`) combinations for generated passwords; it'd average 14 years to brute force at 1 trillion combinations/second.
 >
 > Again, **no cryptanalysis countermeasure is guaranteed**.
 
 > [!NOTE]
-> Password seeds are not meant to be secret: all security relies on the obscurity of the keyfile!
+> Seeds are not needed to be secret: all security relies on the obscurity of the Keyfile!
 
-# Extra: how to get a keyfile?
+## Extra: how to get a Keyfile?
  - On Unix: `dd if=/dev/urandom of=keyfile bs=128 count=1`
