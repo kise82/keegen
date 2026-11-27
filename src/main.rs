@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, BufRead, Read},
+    io::{self, BufRead, IsTerminal, Read},
     path::PathBuf,
     process,
 };
@@ -58,5 +58,9 @@ fn main() {
 
     let mut key = Zeroizing::new([0u8; KEY_BUF_LEN]);
 
-    print!("{}", keyfile.gen_key(seed.trim(), &mut key));
+    print!(
+        "{}{}",
+        keyfile.gen_key(seed.trim(), &mut key),
+        if io::stdout().is_terminal() { "\n" } else { "" }
+    );
 }
